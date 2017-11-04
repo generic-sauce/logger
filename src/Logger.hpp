@@ -22,6 +22,19 @@ namespace log
 				}
 				return *this;
 			}
+
+      Logger& operator<<(
+          std::basic_ostream<char, std::char_traits<char>>&
+          (*f)
+          (std::basic_ostream<char, std::char_traits<char>>&))
+      {
+				for (OutStream stream : streams)
+				{
+					stream << f;
+				}
+				return *this;
+      }
+
 		private:
 			std::vector<OutStream> streams;
 	};
