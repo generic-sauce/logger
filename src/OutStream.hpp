@@ -17,13 +17,13 @@ namespace log
 				(*stream) << t << separator;
 			}
 
-      void operator<<(
-          std::basic_ostream<char, std::char_traits<char>>&
-          (*f)
-          (std::basic_ostream<char, std::char_traits<char>>&))
-      {
+			void operator<<(
+					std::basic_ostream<char, std::char_traits<char>>&
+					(*f)
+					(std::basic_ostream<char, std::char_traits<char>>&))
+			{
 				(*stream) << f;
-      }
+			}
 
 			void setSeparator(const std::string& sep);
 		private:
