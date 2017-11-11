@@ -1,0 +1,46 @@
+namespace log {
+
+class Logger {
+	/* ... */
+};
+
+Logger out;
+Logger err;
+
+} // namespace log
+
+log::out.addStream(&std::cout);
+log::err.addStream(&std::cerr);
+log::out() << "this is an output" << "huso";
+log::err() << "this is an error";
+
+// global format
+log::out() << log::seperator(" ");
+log::out() << log::noseperator;
+log::out() << log::endlines;
+log::out() << log::noendlines;
+log::out() << log::reset;
+
+// idea for format groups
+struct extensive {};
+ostream& operator<<(ostream&, extensive&)
+{
+	return ostream << log::seperator(" ") << log::endlines;
+}
+
+// local format
+log::out(log::endlines) << ...;
+
+// table
+log::Table table;
+table("x", x);
+table("y", y);
+table("y", y);
+table("x", y);
+log::out << table;
+
+log::add_ostreams(&std::cout, &std::cerr);
+log::out() << log::seperator(" ") << log::endlines;
+
+log::out() << "Bruno" << "hat" << "Zucchini";
+"Bruno hat Zucchini\n"
