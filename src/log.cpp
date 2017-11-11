@@ -1,6 +1,6 @@
-#include <iostream>
+#include "Logger.hpp"
 
-void log()
+void log::Logger::addStream(OutStream stream)
 {
-  std::cout << "Hello World!" << std::endl;
+	streams.push_back(stream);
 }
