@@ -27,17 +27,37 @@ namespace log
 			std::string m_str;
 	};
 
+	inline void update_format_state(Format format, FormatState* formatstate)
+	{
+		switch (format) {
+			case Format::reset:
+				formatstate->seperator.clear();
+				formatstate->endlines = false;
+				break;
+			case Format::noseperator:
+				formatstate->seperator.clear();
+				break;
+			case Format::endlines:
+				formatstate->endlines = true;
+				break;
+			case Format::noendlines:
+				formatstate->endlines = false;
+				break;
+		}
+
+	}
+
 	class Forwarder
 	{
 		public:
-			Forwarder(const std::vector<std::ostream*>& ostreams, FormatState& format)
-				: m_counter(0), m_ostreams(ostreams), m_formatstate(format)
+			Forwarder(const std::vector<std::ostream*>& ostreams, FormatState* global_format, FormatState local_format)
+				: m_counter(0), m_ostreams(ostreams), m_global_formatstate(global_format), m_local_formatstate(local_format)
 			{
 			}
 
 			~Forwarder()
 			{
-				if (m_formatstate.endlines)
+				if (m_local_formatstate.endlines)
 					for (auto* ostream : m_ostreams)
 						*ostream << "\n";
 			}
@@ -57,28 +77,15 @@ namespace log
 
 			Forwarder&& operator<<(Format format)
 			{
-				switch (format) {
-					case Format::reset:
-						m_formatstate.seperator.clear();
-						m_formatstate.endlines = false;
-						break;
-					case Format::noseperator:
-						m_formatstate.seperator.clear();
-						break;
-					case Format::endlines:
-						m_formatstate.endlines = true;
-						break;
-					case Format::noendlines:
-						m_formatstate.endlines = false;
-						break;
-				}
-
+				update_format_state(format, &m_local_formatstate);
+				update_format_state(format, m_global_formatstate);
 				return std::move(*this);
 			}
 
 			Forwarder&& operator<<(seperator sep)
 			{
-				m_formatstate.seperator = sep.m_str;
+				m_local_formatstate.seperator = sep.m_str;
+				m_global_formatstate->seperator = sep.m_str;
 				return std::move(*this);
 			}
 
@@ -94,12 +101,13 @@ namespace log
 		private:
 			std::size_t m_counter;
 			const std::vector<std::ostream*>& m_ostreams;
-			FormatState& m_formatstate;
+			FormatState* m_global_formatstate;
+			FormatState m_local_formatstate;
 
 			inline void printSeperator(std::ostream& ostream)
 			{
-				if (m_counter > 0 && m_formatstate.seperator.length() > 0)
-					ostream << m_formatstate.seperator;
+				if (m_counter > 0 && m_local_formatstate.seperator.length() > 0)
+					ostream << m_local_formatstate.seperator;
 			}
 	};
 
@@ -112,14 +120,38 @@ namespace log
 			}
 
 			template <typename ...Ts>
+			inline void recursive_format_check(FormatState* formatstate, Format format, Ts... local_formats)
+			{
+				update_format_state(format, formatstate);
+				recursive_format_check(formatstate, local_formats...);
+			}
+
+			template <typename ...Ts>
+			inline void recursive_format_check(FormatState* formatstate, seperator sep, Ts... local_formats)
+			{
+				formatstate->seperator = sep.m_str;
+				recursive_format_check(formatstate, local_formats...);
+			}
+
+			template <typename ...Ts>
+			inline void recursive_format_check(FormatState*) {}
+
+			template <typename ...Ts>
 			inline Forwarder operator()(Ts&&... local_formats)
 			{
-				return Forwarder(m_ostreams, m_formatstate);
+				if constexpr (sizeof...(Ts) > 0)
+				{
+					FormatState local_state = m_global_formatstate;;
+					recursive_format_check(&local_state, local_formats...);
+					return Forwarder(m_ostreams, &m_global_formatstate, local_state);
+				}
+				else
+					return Forwarder(m_ostreams, &m_global_formatstate, m_global_formatstate);
 			}
 
 		private:
 			std::vector<std::ostream*> m_ostreams;
-			FormatState m_formatstate;
+			FormatState m_global_formatstate;
 	};
 
 	Logger out;
