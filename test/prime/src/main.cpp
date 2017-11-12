@@ -6,7 +6,7 @@ int main()
 {
 	log::out.add_stream(&std::cout);
 
-	log::out() << log::seperator("lll");
-	log::out(log::seperator(" - "), log::endlines) << "Hello" << "world!";
+	log::out() << log::separator("lll");
+	log::out(log::separator(" - "), log::endlines) << "Hello" << "world!";
 	return 0;
 }

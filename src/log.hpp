@@ -8,39 +8,39 @@
 namespace log
 {
 	struct FormatState {
-		std::string seperator;
+		std::string separator;
 		bool endlines;
 	};
 
-	enum Format {
+	enum FormatModifier {
 		reset,
-		noseperator,
+		noseparator,
 		endlines,
 		noendlines
 	};
 
-	class seperator {
+	class separator {
 		public:
-			seperator(std::string str)
+			separator(std::string str)
 				: m_str(std::move(str))
 			{}
 			std::string m_str;
 	};
 
-	inline void update_format_state(Format format, FormatState* formatstate)
+	inline void update_format_state(FormatModifier format_mod, FormatState* formatstate)
 	{
-		switch (format) {
-			case Format::reset:
-				formatstate->seperator.clear();
+		switch (format_mod) {
+			case FormatModifier::reset:
+				formatstate->separator.clear();
 				formatstate->endlines = false;
 				break;
-			case Format::noseperator:
-				formatstate->seperator.clear();
+			case FormatModifier::noseparator:
+				formatstate->separator.clear();
 				break;
-			case Format::endlines:
+			case FormatModifier::endlines:
 				formatstate->endlines = true;
 				break;
-			case Format::noendlines:
+			case FormatModifier::noendlines:
 				formatstate->endlines = false;
 				break;
 		}
@@ -52,14 +52,13 @@ namespace log
 		public:
 			Forwarder(const std::vector<std::ostream*>& ostreams, FormatState* global_format, FormatState local_format)
 				: m_counter(0), m_ostreams(ostreams), m_global_formatstate(global_format), m_local_formatstate(local_format)
-			{
-			}
+			{}
 
 			~Forwarder()
 			{
 				if (m_local_formatstate.endlines)
 					for (auto* ostream : m_ostreams)
-						*ostream << "\n";
+						*ostream << '\n';
 			}
 
 			template <class T>
@@ -67,7 +66,7 @@ namespace log
 			{
 				for (auto* ostream : m_ostreams)
 				{
-					printSeperator(*ostream);
+					print_separator(ostream);
 					*ostream << std::forward<T>(t);
 				}
 
@@ -75,17 +74,17 @@ namespace log
 				return std::move(*this);
 			}
 
-			Forwarder&& operator<<(Format format)
+			Forwarder&& operator<<(FormatModifier format_mod)
 			{
-				update_format_state(format, &m_local_formatstate);
-				update_format_state(format, m_global_formatstate);
+				update_format_state(format_mod, &m_local_formatstate);
+				update_format_state(format_mod, m_global_formatstate);
 				return std::move(*this);
 			}
 
-			Forwarder&& operator<<(seperator sep)
+			Forwarder&& operator<<(separator sep)
 			{
-				m_local_formatstate.seperator = sep.m_str;
-				m_global_formatstate->seperator = sep.m_str;
+				m_local_formatstate.separator = sep.m_str;
+				m_global_formatstate->separator = sep.m_str;
 				return std::move(*this);
 			}
 
@@ -104,10 +103,10 @@ namespace log
 			FormatState* m_global_formatstate;
 			FormatState m_local_formatstate;
 
-			inline void printSeperator(std::ostream& ostream)
+			inline void print_separator(std::ostream* ostream)
 			{
-				if (m_counter > 0 && m_local_formatstate.seperator.length() > 0)
-					ostream << m_local_formatstate.seperator;
+				if (m_counter > 0 && !m_local_formatstate.separator.empty())
+					*ostream << m_local_formatstate.separator;
 			}
 	};
 
@@ -120,16 +119,16 @@ namespace log
 			}
 
 			template <typename ...Ts>
-			inline void recursive_format_check(FormatState* formatstate, Format format, Ts... local_formats)
+			inline void recursive_format_check(FormatState* formatstate, FormatModifier format_mod, Ts... local_formats)
 			{
-				update_format_state(format, formatstate);
+				update_format_state(format_mod, formatstate);
 				recursive_format_check(formatstate, local_formats...);
 			}
 
 			template <typename ...Ts>
-			inline void recursive_format_check(FormatState* formatstate, seperator sep, Ts... local_formats)
+			inline void recursive_format_check(FormatState* formatstate, separator sep, Ts... local_formats)
 			{
-				formatstate->seperator = sep.m_str;
+				formatstate->separator = sep.m_str;
 				recursive_format_check(formatstate, local_formats...);
 			}
 
