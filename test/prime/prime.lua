@@ -13,6 +13,7 @@ function target:configure(settings)
   local src = CollectRecursive(PathJoin(self_src_dir, "*.cpp"))
   local obj = Compile(settings, src)
   local bin = Link(settings, "test_"..self.name, { obj })
+	self.bin = bin
 
   AddDependency(PathJoin("test", self.name), bin)
 end

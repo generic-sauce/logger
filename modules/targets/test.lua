@@ -13,5 +13,12 @@ function target:configure(settings)
 
     target:configure(TableDeepCopy(settings))
     AddDependency(self.name, target_name)
+
+		if target.bin ~= nil then
+			local run_target = "run_"..target.name
+			PseudoTarget(run_target)
+			AddDependency(run_target, target_name)
+			AddJob(run_target, "Running test: "..target.name, PathJoin(build_dir, "test_"..target.name))
+		end
   end
 end
