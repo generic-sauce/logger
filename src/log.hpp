@@ -158,8 +158,8 @@ namespace log
 			FormatState m_global_formatstate;
 	};
 
-	Logger out;
-	Logger err;
+	static Logger out;
+	static Logger err;
 }
 
 #endif
