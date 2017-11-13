@@ -56,9 +56,10 @@ namespace log
 
 			~Forwarder()
 			{
-				if (m_local_formatstate.endlines)
-					for (auto* ostream : m_ostreams)
-						*ostream << '\n';
+				if (m_counter > 0)
+					if (m_local_formatstate.endlines)
+						for (auto* ostream : m_ostreams)
+							*ostream << '\n';
 			}
 
 			template <class T>
