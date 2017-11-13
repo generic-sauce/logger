@@ -118,6 +118,8 @@ namespace log
 				m_ostreams.push_back(ostream);
 			}
 
+		private:
+
 			template <typename ...Ts>
 			inline void recursive_format_check(FormatState* formatstate, FormatModifier format_mod, Ts... local_formats)
 			{
@@ -134,6 +136,8 @@ namespace log
 
 			template <typename ...Ts>
 			inline void recursive_format_check(FormatState*) {}
+
+		public:
 
 			template <typename ...Ts>
 			inline Forwarder operator()(Ts&&... local_formats)
