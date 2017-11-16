@@ -4,6 +4,7 @@
 #include <ostream>
 #include <vector>
 #include <string>
+#include <algorithm>
 
 namespace log
 {
@@ -16,14 +17,18 @@ namespace log
 		reset,
 		noseparator,
 		endlines,
-		noendlines
+		noendlines,
+		exclude,
+		easecase,
+		lowercase,
+		uppercase,
 	};
 
 	class separator {
 		public:
-			separator(std::string str)
-				: m_str(std::move(str))
-			{}
+			separator(std::string str) : m_str(std::move(str)) {}
+			std::string str() { return m_str; }
+		private:
 			std::string m_str;
 	};
 
@@ -44,7 +49,6 @@ namespace log
 				formatstate->endlines = false;
 				break;
 		}
-
 	}
 
 	class Forwarder
@@ -62,13 +66,22 @@ namespace log
 							*ostream << '\n';
 			}
 
-			template <class T>
+			template <typename T>
 			Forwarder&& operator<<(T&& t)
 			{
 				for (auto* ostream : m_ostreams)
 				{
 					print_separator(ostream);
-					*ostream << std::forward<T>(t);
+
+					if constexpr (
+							std::is_same<
+								typename std::remove_reference<T>::type,
+								std::string>::value)
+					{
+						*ostream << [](std::string s){ return s; }();
+					}
+					else
+						*ostream << std::forward<T>(t);
 				}
 
 				m_counter++;
@@ -84,8 +97,8 @@ namespace log
 
 			Forwarder&& operator<<(separator sep)
 			{
-				m_local_formatstate.separator = sep.m_str;
-				m_global_formatstate->separator = sep.m_str;
+				m_local_formatstate.separator = sep.str();
+				m_global_formatstate->separator = sep.str();
 				return std::move(*this);
 			}
 
@@ -114,13 +127,29 @@ namespace log
 	class Logger
 	{
 		public:
+			void clear_streams()
+			{
+				m_ostreams.clear();
+			}
+
+			bool has_stream(std::ostream* ostream)
+			{
+				return std::find(std::begin(m_ostreams), std::end(m_ostreams), ostream) != std::end(m_ostreams);
+			}
+
 			void add_stream(std::ostream* ostream)
 			{
 				m_ostreams.push_back(ostream);
 			}
 
-		private:
+			void remove_stream(std::ostream* ostream)
+			{
+				m_ostreams.erase(
+						std::remove(std::begin(m_ostreams), std::end(m_ostreams), ostream),
+						std::end(m_ostreams));
+			}
 
+		private:
 			template <typename ...Ts>
 			inline void recursive_format_check(FormatState* formatstate, FormatModifier format_mod, Ts... local_formats)
 			{
@@ -131,7 +160,7 @@ namespace log
 			template <typename ...Ts>
 			inline void recursive_format_check(FormatState* formatstate, separator sep, Ts... local_formats)
 			{
-				formatstate->separator = sep.m_str;
+				formatstate->separator = sep.str();
 				recursive_format_check(formatstate, local_formats...);
 			}
 
@@ -139,7 +168,6 @@ namespace log
 			inline void recursive_format_check(FormatState*) {}
 
 		public:
-
 			template <typename ...Ts>
 			inline Forwarder operator()(Ts&&... local_formats)
 			{
