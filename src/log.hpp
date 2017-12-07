@@ -5,20 +5,33 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <iomanip>
+#include <type_traits>
+#include <cstring>
+
+namespace {
+void toLowerCase(char* cstr)
+{
+	for (char* c = cstr; *c != '\0'; c++)
+		if (*c >= 'A' && *c <= 'Z')
+			*c += 'a'-'A';
+}
+
+void toUpperCase(char* cstr)
+{
+	for (char* c = cstr; *c != '\0'; c++)
+		if (*c >= 'a' && *c <= 'z')
+			*c += 'A'-'a';
+}
+} // unnamed namespace
 
 namespace log
 {
-	struct FormatState {
-		std::string separator;
-		bool endlines;
-	};
-
-	enum FormatModifier {
+	enum FormatFlags {
 		reset,
 		noseparator,
 		endlines,
 		noendlines,
-		exclude,
 		easecase,
 		lowercase,
 		uppercase,
@@ -32,21 +45,37 @@ namespace log
 			std::string m_str;
 	};
 
-	inline void update_format_state(FormatModifier format_mod, FormatState* formatstate)
+	struct FormatState {
+		std::string separator;
+		bool endlines = false;
+		FormatFlags lettercase = FormatFlags::easecase;
+	};
+
+	inline void update_format_state(FormatFlags format_mod, FormatState* formatstate)
 	{
 		switch (format_mod) {
-			case FormatModifier::reset:
+			case FormatFlags::reset:
 				formatstate->separator.clear();
 				formatstate->endlines = false;
+				formatstate->lettercase = FormatFlags::easecase;
 				break;
-			case FormatModifier::noseparator:
+			case FormatFlags::noseparator:
 				formatstate->separator.clear();
 				break;
-			case FormatModifier::endlines:
+			case FormatFlags::endlines:
 				formatstate->endlines = true;
 				break;
-			case FormatModifier::noendlines:
+			case FormatFlags::noendlines:
 				formatstate->endlines = false;
+				break;
+			case FormatFlags::easecase:
+				formatstate->lettercase = FormatFlags::easecase;
+				break;
+			case FormatFlags::lowercase:
+				formatstate->lettercase = FormatFlags::lowercase;
+				break;
+			case FormatFlags::uppercase:
+				formatstate->lettercase = FormatFlags::uppercase;
 				break;
 		}
 	}
@@ -54,16 +83,24 @@ namespace log
 	class Forwarder
 	{
 		public:
-			Forwarder(const std::vector<std::ostream*>& ostreams, FormatState* global_format, FormatState local_format)
-				: m_counter(0), m_ostreams(ostreams), m_global_formatstate(global_format), m_local_formatstate(local_format)
+			Forwarder(const std::vector<std::ostream*>& ostreams,
+					FormatState* global_format,
+					FormatState local_format)
+				: m_counter(0), m_ostreams(ostreams)
+				, m_global_formatstate(global_format)
+				, m_local_formatstate(local_format)
 			{}
+
+			Forwarder() = delete;
+			Forwarder(const Forwarder&) = delete;
+			Forwarder(Forwarder&&) = delete;
 
 			~Forwarder()
 			{
 				if (m_counter > 0)
 					if (m_local_formatstate.endlines)
 						for (auto* ostream : m_ostreams)
-							*ostream << '\n';
+								*ostream << '\n';
 			}
 
 			template <typename T>
@@ -72,13 +109,24 @@ namespace log
 				for (auto* ostream : m_ostreams)
 				{
 					print_separator(ostream);
-
-					if constexpr (
-							std::is_same<
-								typename std::remove_reference<T>::type,
-								std::string>::value)
+					if constexpr(std::is_convertible_v<std::remove_reference_t<T>, std::string_view>)
 					{
-						*ostream << [](std::string s){ return s; }();
+						std::string_view view(t);
+						char cstr[view.length() + 1];
+						std::strcpy(cstr, view.data());
+						cstr[view.length()] = '\0';
+						switch (m_local_formatstate.lettercase)
+						{
+							case FormatFlags::lowercase:
+								toLowerCase(cstr);
+								break;
+							case FormatFlags::uppercase:
+								toUpperCase(cstr);
+								break;
+							default:
+								break;
+						}
+						*ostream << cstr;
 					}
 					else
 						*ostream << std::forward<T>(t);
@@ -88,7 +136,7 @@ namespace log
 				return std::move(*this);
 			}
 
-			Forwarder&& operator<<(FormatModifier format_mod)
+			Forwarder&& operator<<(FormatFlags format_mod)
 			{
 				update_format_state(format_mod, &m_local_formatstate);
 				update_format_state(format_mod, m_global_formatstate);
@@ -102,14 +150,29 @@ namespace log
 				return std::move(*this);
 			}
 
-			/*Forwarder&& operator<<(
-					std::ostream& (*f) (std::ostream&))
+			Forwarder&& operator<<(std::ostream& (*f) (std::ostream&))
+			{
+				for (auto* ostream : m_ostreams) 
+					*ostream << f;
+
+				return std::move(*this);
+			}
+
+			Forwarder&& operator<<(std::basic_ios<char, std::char_traits<char>>& (*f) (std::basic_ios<char, std::char_traits<char>>&))
 			{
 				for (auto* ostream : m_ostreams)
 					*ostream << f;
 
 				return std::move(*this);
-			}*/
+			}
+
+			Forwarder&& operator<<(std::ios_base& (*f) (std::ios_base&))
+			{
+				for (auto* ostream : m_ostreams)
+					*ostream << f;
+
+				return std::move(*this);
+			}
 
 		private:
 			std::size_t m_counter;
@@ -149,19 +212,31 @@ namespace log
 						std::end(m_ostreams));
 			}
 
+			void setstdf(std::ios::fmtflags fmtflags)
+			{
+				for (auto* ostream : m_ostreams)
+					ostream->setf(fmtflags);
+			}
+
+			void unsetstdf(std::ios::fmtflags fmtflags)
+			{
+				for (auto* ostream : m_ostreams)
+					ostream->unsetf(fmtflags);
+			}
+
 		private:
 			template <typename ...Ts>
-			inline void recursive_format_check(FormatState* formatstate, FormatModifier format_mod, Ts... local_formats)
+			inline void recursive_format_check(FormatState* formatstate, FormatFlags flag, Ts... rest)
 			{
-				update_format_state(format_mod, formatstate);
-				recursive_format_check(formatstate, local_formats...);
+				update_format_state(flag, formatstate);
+				recursive_format_check(formatstate, rest...);
 			}
 
 			template <typename ...Ts>
-			inline void recursive_format_check(FormatState* formatstate, separator sep, Ts... local_formats)
+			inline void recursive_format_check(FormatState* formatstate, separator sep, Ts... rest)
 			{
 				formatstate->separator = sep.str();
-				recursive_format_check(formatstate, local_formats...);
+				recursive_format_check(formatstate, rest...);
 			}
 
 			template <typename ...Ts>
